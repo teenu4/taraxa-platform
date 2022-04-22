@@ -1,5 +1,6 @@
-import React, { useHistory } from 'react-router-dom';
-import { ethers } from 'ethers';
+import React, { useEffect, useState } from 'react';
+import { useHistory } from 'react-router-dom';
+import { BigNumber, ethers } from 'ethers';
 
 import {
   ProfileBasicCard,
@@ -8,8 +9,10 @@ import {
   Button,
   Tooltip,
   ProfileSubmissionsCard,
+  Checkbox,
 } from '@taraxa_project/taraxa-ui';
 
+import { useClaimApi } from '../../services/useApi';
 import BountyIcon from '../../assets/icons/bounties';
 import TaraxaIcon from '../../assets/icons/taraxaIcon';
 import InfoIcon from '../../assets/icons/info';
@@ -22,6 +25,7 @@ import { formatTime } from '../../utils/time';
 import { useAuth } from '../../services/useAuth';
 import useSubmissions from '../../services/useSubmissions';
 import Title from '../../components/Title/Title';
+import useCMetamask from '../../services/useCMetamask';
 
 interface ViewProfileDetailsKYCProps {
   openKYCModal: () => void;
@@ -85,7 +89,30 @@ interface ViewProfileDetailsProps {
 
 function ViewProfileDetails({ points, openEditProfile, openKYCModal }: ViewProfileDetailsProps) {
   const auth = useAuth();
+  const { account } = useCMetamask();
   const history = useHistory();
+  const claimApi = useClaimApi();
+  const [lockedPoints, setLockedPoints] = useState(false);
+  const [calculatedPoints, setCalculatedPoints] = useState<BigNumber>(
+    ethers.BigNumber.from(points),
+  );
+
+  useEffect(() => {
+    if (account) {
+      claimApi
+        .post(`/accounts/${account}`, {})
+        .then((response) => {
+          const { totalClaimed, totalLocked } = response.response;
+          const calculated = ethers.BigNumber.from(totalClaimed)
+            .sub(ethers.BigNumber.from(totalLocked))
+            .add(ethers.BigNumber.from(points));
+          setCalculatedPoints(calculated);
+        })
+        .catch(() => {
+          setCalculatedPoints(ethers.BigNumber.from(points));
+        });
+    }
+  }, [account]);
 
   const buttons = (
     <>
@@ -123,19 +150,30 @@ function ViewProfileDetails({ points, openEditProfile, openKYCModal }: ViewProfi
       <ViewProfileDetailsKYC openKYCModal={openKYCModal} />
       <ProfileBasicCard
         title="My Rewards"
-        description="TARA Points"
-        value={ethers.utils.commify(ethers.BigNumber.from(points.toString()).toString())}
+        value={ethers.utils.commify(calculatedPoints.toString())}
         buttonOptions={
           <Button
             variant="contained"
             color="secondary"
-            label="Claim rewards"
+            label="Go to redeem page"
             disabled={ethers.BigNumber.from(points.toString()).eq('0')}
             fullWidth
             onClick={() => history.push('/redeem')}
           />
         }
-      />
+      >
+        <div className="flexExpand">
+          Redeemable TARA Points
+          <div className="lockedPointsCheckbox">
+            <Checkbox
+              checked={!account || lockedPoints}
+              disabled={!account}
+              onChange={(e) => setLockedPoints(e.target.checked)}
+            />
+            Show locked points
+          </div>
+        </div>
+      </ProfileBasicCard>
     </div>
   );
 }
