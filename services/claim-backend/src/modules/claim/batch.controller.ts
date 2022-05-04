@@ -4,7 +4,6 @@ import {
   Delete,
   Get,
   Param,
-  Patch,
   Post,
   UseGuards,
   UseInterceptors,
@@ -29,6 +28,7 @@ import {
 } from '@taraxa-claim/common';
 import { BatchEntity } from './entity/batch.entity';
 import { CreateBatchDto } from './dto/create-batch.dto';
+import { PendingRewardDto } from './dto/pending-reward.dto';
 
 @ApiBearerAuth()
 @ApiTags('batches')
@@ -45,22 +45,18 @@ export class BatchController {
     return await this.claimService.createBatch(batchDto);
   }
   @ApiOkResponse()
-  @ApiForbiddenResponse({ description: 'You need a valid token' })
-  @Patch('/:id/import-community-rewards')
-  async importCommunityRewards(@Param('id') id: number): Promise<BatchEntity> {
-    return await this.claimService.importCommunityRewards(id);
-  }
-  @ApiOkResponse()
-  @ApiForbiddenResponse({ description: 'You need a valid token' })
-  @Patch('/:id/import-delegation-rewards')
-  async importDelegationRewards(@Param('id') id: number): Promise<BatchEntity> {
-    return await this.claimService.importDelegationRewards(id);
-  }
-  @ApiOkResponse()
   @ApiUnauthorizedResponse({ description: 'You need a valid token' })
   @Get(':id')
   async getBatch(@Param('id') id: number): Promise<BatchEntity> {
     return await this.claimService.batch(id);
+  }
+  @ApiOkResponse()
+  @ApiUnauthorizedResponse({ description: 'You need a valid token' })
+  @Get(':id/pending-rewards')
+  async getPendingRewardsForBatch(
+    @Param('id') id: number,
+  ): Promise<PendingRewardDto[]> {
+    return await this.claimService.getPendingRewardsForBatch(id);
   }
   @ApiNoContentResponse()
   @ApiUnauthorizedResponse({ description: 'You need a valid token' })
