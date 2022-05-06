@@ -44,7 +44,7 @@ function useRedeem() {
         id: claim.id,
         address: claim.address,
         numberOfTokens: BigNumber.from(ethers.utils.parseUnits(claim.numberOfTokens, 18)),
-        claimedAt: moment(claim.claimedAt).toDate(),
+        claimedAt: claim.claimedAt ? moment(claim.claimedAt).toDate() : null,
         createdAt: moment(claim.createdAt).toDate(),
         claimed: claim.claimed,
         totalClaimed: BigNumber.from('0'),
@@ -55,6 +55,7 @@ function useRedeem() {
     );
     const finalClaims = transformedClaims.map((_claim, ind) => {
       const prevElement = ind > 0 ? transformedClaims[ind - 1] : undefined;
+      if (!_claim.claimed) return _claim;
       if (prevElement && prevElement.totalClaimed) {
         _claim.totalClaimed = prevElement.totalClaimed.add(_claim.numberOfTokens);
       } else {
