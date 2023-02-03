@@ -7,7 +7,6 @@ import {
   toChecksumAddress,
   PbftEntity,
 } from '@taraxa_project/explorer-shared';
-import dataSourceOptions from 'src/data-source.options';
 import { IGQLPBFT } from 'src/types';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import DagService from '../dag/dag.service';
@@ -121,11 +120,15 @@ export default class PbftService {
           _pbft.save();
         }
       }
-      const pbftFound = await this.pbftRepository.findOneBy({
-        hash: _pbft.hash,
+      const pbftFound = await this.pbftRepository.findOne({
+        where: {
+          hash: _pbft.hash,
+        },
+        relations: ['transactions'],
       });
       return pbftFound;
     } catch (error) {
+      this.logger.error(error);
       this.logger.error(`Error when saving PBFT: ${JSON.stringify(error)}`);
       return _pbft;
     }

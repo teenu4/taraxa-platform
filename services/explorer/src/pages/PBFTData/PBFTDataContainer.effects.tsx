@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from 'urql';
 import cleanDeep from 'clean-deep';
 import { blockQuery } from '../../api';
-import { useExplorerNetwork } from '../../hooks/useExplorerNetwork';
-import { useExplorerLoader } from '../../hooks/useLoader';
+import { useExplorerNetwork, useExplorerLoader } from '../../hooks';
 import { PbftBlock, Transaction } from '../../models';
+import { displayWeiOrTara } from '../../utils';
 
 export const usePBFTDataContainerEffects = (
   blockNumber?: number,
@@ -13,8 +14,12 @@ export const usePBFTDataContainerEffects = (
   blockData: PbftBlock;
   transactions: Transaction[];
   currentNetwork: string;
+  showLoadingSkeleton: boolean;
 } => {
   const { currentNetwork } = useExplorerNetwork();
+  const [network] = useState(currentNetwork);
+  const navigate = useNavigate();
+
   const [blockData, setBlockData] = useState<PbftBlock>({} as PbftBlock);
   const [transactions, setTransactions] = useState<Transaction[]>([
     {} as Transaction,
@@ -25,24 +30,42 @@ export const usePBFTDataContainerEffects = (
       number: blockNumber,
       hash: txHash,
     }),
-    pause: !blockNumber && !txHash,
+    pause: !(blockNumber !== null || blockNumber !== undefined) && !txHash,
   });
   const { initLoading, finishLoading } = useExplorerLoader();
+  const [showLoadingSkeleton, setShowLoadingSkeleton] =
+    useState<boolean>(false);
 
   useEffect(() => {
     if (fetching) {
       initLoading();
+      setShowLoadingSkeleton(true);
     } else {
       finishLoading();
+      setShowLoadingSkeleton(false);
     }
   }, [currentNetwork, fetching]);
 
   useEffect(() => {
     if (data?.block) {
       setBlockData(data.block);
-      setTransactions(data.block.transactions);
+      setTransactions(
+        data?.block?.transactions?.map((tx: Transaction) => {
+          return {
+            ...tx,
+            value: displayWeiOrTara(tx.value),
+            gasUsed: displayWeiOrTara(tx.gasUsed),
+          };
+        })
+      );
     }
   }, [data]);
 
-  return { blockData, transactions, currentNetwork };
+  useEffect(() => {
+    if (currentNetwork !== network) {
+      navigate(-1);
+    }
+  }, [currentNetwork, network]);
+
+  return { blockData, transactions, currentNetwork, showLoadingSkeleton };
 };

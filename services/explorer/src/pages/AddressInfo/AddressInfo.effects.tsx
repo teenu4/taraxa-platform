@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from 'urql';
+import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
-import { accountQuery } from '../../api/graphql/queries/account';
-import { useExplorerLoader } from '../../hooks/useLoader';
+import { useExplorerNetwork, useExplorerLoader } from '../../hooks';
 import { AddressInfoDetails, BlockData, Transaction } from '../../models';
 import {
-  useGetBlocksByAddress,
+  addressDetailsQuery,
   useGetDagsByAddress,
-  useGetDetailsForAddress,
   useGetPbftsByAddress,
+  useGetDagsCountByAddress,
+  useGetPbftsCountByAddress,
   useGetTransactionsByAddress,
 } from '../../api';
+import { displayWeiOrTara, fromWeiToTara } from '../../utils';
+import { useQuery } from 'urql';
+import { useGetTokenPrice } from '../../api/fetchTokenPrice';
 
 export interface TransactionResponse {
   hash: string;
@@ -31,67 +34,135 @@ export const useAddressInfoEffects = (
   addressInfoDetails: AddressInfoDetails;
   dagBlocks: BlockData[];
   pbftBlocks: BlockData[];
+  totalPbftCount: number;
+  rowsPbftPerPage: number;
+  pbftPage: number;
+  handlePbftChangePage: (newPage: number) => void;
+  handlePbftChangeRowsPerPage: (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => void;
+  totalDagCount: number;
+  rowsDagPerPage: number;
+  dagPage: number;
+  handleDagChangePage: (newPage: number) => void;
+  handleDagChangeRowsPerPage: (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => void;
+  totalTxCount: number;
+  rowsTxPerPage: number;
+  txPage: number;
+  handleTxChangePage: (newPage: number) => void;
+  handleTxChangeRowsPerPage: (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => void;
+  showLoadingSkeleton: boolean;
+  tabsStep: number;
+  setTabsStep: (step: number) => void;
+  isFetchingDagsCount: boolean;
+  isLoadingDagsCount: boolean;
+  isFetchingPbftsCount: boolean;
+  isLoadingPbftsCount: boolean;
 } => {
-  const [transactions, setTransactions] = useState<Transaction[]>();
-  const [dagBlocks, setDagBlocks] = useState<BlockData[]>();
-  const [pbftBlocks, setPbftBlocks] = useState<BlockData[]>();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [dagBlocks, setDagBlocks] = useState<BlockData[]>([]);
+  const [pbftBlocks, setPbftBlocks] = useState<BlockData[]>([]);
+  const [tabsStep, setTabsStep] = useState<number>(0);
+
+  const [totalPbftCount, setTotalPbftCount] = useState<number>(0);
+  const [rowsPbftPerPage, setPbftRowsPerPage] = useState<number>(25);
+  const [pbftPage, setPbftPage] = useState(0);
+
+  const [totalDagCount, setTotalDagCount] = useState<number>(0);
+  const [rowsDagPerPage, setDagRowsPerPage] = useState<number>(25);
+  const [dagPage, setDagPage] = useState(0);
+
+  const [totalTxCount, setTotalTxCount] = useState<number>(0);
+  const [rowsTxPerPage, setTxRowsPerPage] = useState<number>(25);
+  const [txPage, setTxPage] = useState(0);
+
   const [addressInfoDetails, setAddressInfoDetails] =
     useState<AddressInfoDetails>();
-  const [{ fetching, data }] = useQuery({
-    query: accountQuery,
-    variables: { account },
-    pause: !account,
-  });
+
   const { initLoading, finishLoading } = useExplorerLoader();
+  const { backendEndpoint, currentNetwork } = useExplorerNetwork();
+  const navigate = useNavigate();
+  const [network] = useState(currentNetwork);
+  const [showLoadingSkeleton, setShowLoadingSkeleton] =
+    useState<boolean>(false);
+
   const {
-    data: nodeData,
-    isFetching: isFetchingBlocks,
-    isLoading: isLoadingBlocks,
-  } = useGetBlocksByAddress(account);
+    data: dagsCount,
+    isFetching: isFetchingDagsCount,
+    isLoading: isLoadingDagsCount,
+  } = useGetDagsCountByAddress(backendEndpoint, account);
+
+  const {
+    data: pbftsCount,
+    isFetching: isFetchingPbftsCount,
+    isLoading: isLoadingPbftsCount,
+  } = useGetPbftsCountByAddress(backendEndpoint, account);
+
   const {
     data: dagsData,
     isFetching: isFetchingDags,
     isLoading: isLoadingDags,
-  } = useGetDagsByAddress(account);
+  } = useGetDagsByAddress(backendEndpoint, account, {
+    rowsPerPage: rowsDagPerPage,
+    page: dagPage,
+  });
   const {
     data: pbftsData,
     isFetching: isFetchingPbfts,
     isLoading: isLoadingPbfts,
-  } = useGetPbftsByAddress(account);
+  } = useGetPbftsByAddress(backendEndpoint, account, {
+    rowsPerPage: rowsPbftPerPage,
+    page: pbftPage,
+  });
   const {
     data: txData,
     isFetching: isFetchingTx,
     isLoading: isLoadingTx,
-  } = useGetTransactionsByAddress(account);
+  } = useGetTransactionsByAddress(backendEndpoint, account, {
+    rowsPerPage: rowsTxPerPage,
+    page: txPage,
+  });
 
   const {
-    data: details,
-    isFetching: isFetchingDetails,
-    isLoading: isLoadingDetails,
-  } = useGetDetailsForAddress(account);
+    data: tokenPriceData,
+    isFetching: isFetchingTokenPrice,
+    isLoading: isLoadingTokenPrice,
+  } = useGetTokenPrice();
+
+  const [{ fetching: fetchingDetails, data: accountDetails }] = useQuery({
+    query: addressDetailsQuery,
+    variables: {
+      account,
+    },
+    pause: !account,
+  });
 
   useEffect(() => {
     if (
-      fetching ||
-      isFetchingBlocks ||
-      isLoadingBlocks ||
+      fetchingDetails ||
+      isFetchingTokenPrice ||
+      isLoadingTokenPrice ||
       isFetchingDags ||
       isLoadingDags ||
       isFetchingPbfts ||
       isLoadingPbfts ||
       isFetchingTx ||
-      isLoadingTx ||
-      isFetchingDetails ||
-      isLoadingDetails
+      isLoadingTx
     ) {
       initLoading();
+      setShowLoadingSkeleton(true);
     } else {
       finishLoading();
+      setShowLoadingSkeleton(false);
     }
   }, [
-    fetching,
-    isFetchingBlocks,
-    isLoadingBlocks,
+    fetchingDetails,
+    isFetchingTokenPrice,
+    isLoadingTokenPrice,
     isFetchingDags,
     isLoadingDags,
     isFetchingPbfts,
@@ -100,31 +171,24 @@ export const useAddressInfoEffects = (
     isLoadingTx,
   ]);
 
-  useEffect(() => {
-    if (dagsData?.data) {
-      setDagBlocks(dagsData?.data);
-    }
-  }, [dagsData]);
-
-  useEffect(() => {
-    if (pbftsData?.data) {
-      setPbftBlocks(pbftsData?.data);
-    }
-  }, [pbftsData]);
-
   const formatToTransaction = (
     transactions: TransactionResponse[]
   ): Transaction[] => {
-    return transactions.map((tx) => {
+    if (transactions?.length === 0) {
+      return [];
+    }
+    return transactions?.map((tx) => {
       return {
         hash: tx.hash,
         block: {
           number: tx.block,
           timestamp: tx.age,
         },
-        value: ethers.BigNumber.from(tx.value),
-        gasPrice: ethers.BigNumber.from(tx.gasPrice),
-        gas: ethers.BigNumber.from(tx.gasUsed),
+        value: displayWeiOrTara(
+          ethers.BigNumber.from(BigInt(Math.round(+tx.value)))
+        ),
+        gasPrice: displayWeiOrTara(ethers.BigNumber.from(tx.gasPrice)),
+        gas: displayWeiOrTara(ethers.BigNumber.from(tx.gasUsed)),
         status: tx.status,
         from: {
           address: tx.from,
@@ -137,54 +201,147 @@ export const useAddressInfoEffects = (
   };
 
   useEffect(() => {
-    if (txData?.data) {
+    if (txData?.data && txData?.total !== undefined && txData?.total !== null) {
       setTransactions(formatToTransaction(txData.data));
+      setTotalTxCount(txData?.total);
     }
   }, [txData]);
 
-  const getFees = (transactions: TransactionResponse[], address: string) => {
-    if (!transactions || !transactions?.length) {
-      return 0;
+  useEffect(() => {
+    if (
+      dagsData?.data &&
+      dagsData?.total !== undefined &&
+      dagsData?.total !== null
+    ) {
+      setDagBlocks(dagsData?.data as BlockData[]);
+      setTotalDagCount(dagsData?.total);
     }
-    const fromTransactions: TransactionResponse[] = transactions.filter(
-      (tx: TransactionResponse) => tx.from === address
-    );
-    const sum = fromTransactions.reduce((accumulator: any, object) => {
-      return Number(accumulator) + Number(object.gasUsed);
-    }, 0);
-    return sum;
-  };
+  }, [dagsData]);
+
+  useEffect(() => {
+    if (
+      pbftsData?.data &&
+      pbftsData?.total !== undefined &&
+      pbftsData?.total !== null
+    ) {
+      setPbftBlocks(pbftsData?.data as BlockData[]);
+      setTotalPbftCount(pbftsData?.total);
+    }
+  }, [pbftsData]);
 
   useEffect(() => {
     const addressDetails: AddressInfoDetails = { ...addressInfoDetails };
     addressDetails.address = account;
-    if (details?.data) {
-      addressDetails.balance = ethers.utils.formatEther(
-        ethers.BigNumber.from(details?.data.currentBalance)
-      );
-      addressDetails.value = details?.data.currentValue;
-      addressDetails.valueCurrency = details?.data?.currency;
-      addressDetails.totalReceived = ethers.utils.formatEther(
-        ethers.BigNumber.from(details?.data.totalReceived)
-      );
-      addressDetails.totalSent = ethers.utils.formatEther(
-        ethers.BigNumber.from(details?.data.totalSent)
-      );
-      addressDetails.pricePerTara = details?.data?.priceAtTimeOfCalculation;
+
+    if (dagsCount?.data) {
+      addressDetails.dagBlocks = dagsCount?.data?.total;
     }
-    if (data?.block) {
-      addressDetails.address = data?.block?.account?.address;
+
+    if (pbftsCount?.data) {
+      addressDetails.pbftBlocks = pbftsCount?.data?.total;
     }
-    if (nodeData?.data) {
-      addressDetails.dagBlocks = nodeData?.data?.dags;
-      addressDetails.pbftBlocks = nodeData?.data?.pbft;
+
+    if (accountDetails) {
+      const account = accountDetails?.block?.account;
+      addressDetails.balance = fromWeiToTara(
+        ethers.BigNumber.from(account?.balance)
+      );
+      addressDetails.transactionCount = account?.transactionCount;
     }
-    if (txData?.data) {
-      addressDetails.transactionCount = txData.data.length;
-      addressDetails.fees = `${getFees(txData.data, account)}`;
+
+    if (tokenPriceData?.data) {
+      const price = tokenPriceData.data[0].current_price as number;
+      const priceAtTimeOfCalculation = Number(price.toFixed(6));
+      addressDetails.pricePerTara = priceAtTimeOfCalculation;
+      addressDetails.valueCurrency = 'USD';
+
+      if (accountDetails?.block?.account) {
+        const currentValue =
+          +ethers.utils.formatUnits(
+            accountDetails?.block?.account?.balance,
+            'ether'
+          ) * price;
+        addressDetails.value = `${currentValue}`;
+      }
     }
     setAddressInfoDetails(addressDetails);
-  }, [details, data, nodeData, txData]);
+  }, [
+    accountDetails,
+    tokenPriceData,
+    dagsData,
+    pbftsData,
+    dagsCount,
+    pbftsCount,
+  ]);
 
-  return { transactions, addressInfoDetails, dagBlocks, pbftBlocks };
+  useEffect(() => {
+    if (currentNetwork !== network) {
+      navigate('/');
+    }
+  }, [currentNetwork, network]);
+
+  const handlePbftChangePage = (newPage: number) => {
+    setPbftPage(newPage);
+  };
+
+  const handlePbftChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setTotalPbftCount(0);
+    setPbftRowsPerPage(parseInt(event.target.value, 10));
+    setPbftPage(0);
+  };
+
+  const handleDagChangePage = (newPage: number) => {
+    setDagPage(newPage);
+  };
+
+  const handleDagChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setTotalDagCount(0);
+    setDagRowsPerPage(parseInt(event.target.value, 10));
+    setDagPage(0);
+  };
+
+  const handleTxChangePage = (newPage: number) => {
+    setTxPage(newPage);
+  };
+
+  const handleTxChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setTotalTxCount(0);
+    setTxRowsPerPage(parseInt(event.target.value, 10));
+    setTxPage(0);
+  };
+
+  return {
+    transactions,
+    addressInfoDetails,
+    dagBlocks,
+    pbftBlocks,
+    totalPbftCount,
+    rowsPbftPerPage,
+    pbftPage,
+    handlePbftChangePage,
+    handlePbftChangeRowsPerPage,
+    totalDagCount,
+    rowsDagPerPage,
+    dagPage,
+    handleDagChangePage,
+    handleDagChangeRowsPerPage,
+    totalTxCount,
+    rowsTxPerPage,
+    txPage,
+    handleTxChangePage,
+    handleTxChangeRowsPerPage,
+    showLoadingSkeleton,
+    tabsStep,
+    setTabsStep,
+    isFetchingDagsCount,
+    isLoadingDagsCount,
+    isFetchingPbftsCount,
+    isLoadingPbftsCount,
+  };
 };

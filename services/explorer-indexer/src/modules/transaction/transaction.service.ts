@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  deZeroX,
   IPBFT,
   ITransaction,
   PbftEntity,
@@ -10,15 +11,26 @@ import {
 } from '@taraxa_project/explorer-shared';
 import { IGQLTransaction } from 'src/types';
 import { Repository } from 'typeorm';
+import { toBN } from 'web3-utils';
 
 @Injectable()
 export default class TransactionService {
   private readonly logger: Logger = new Logger(TransactionService.name);
+  private isRedisConnected: boolean;
   constructor(
     @InjectRepository(TransactionEntity)
     private txRepository: Repository<TransactionEntity>
   ) {
     this.txRepository = txRepository;
+    this.isRedisConnected = true;
+  }
+
+  public getRedisConnectionState() {
+    return this.isRedisConnected;
+  }
+
+  public setRedisConnectionState(state: boolean) {
+    this.isRedisConnected = state;
   }
 
   public async deleteTransactions(transactions: TransactionEntity[]) {
@@ -38,8 +50,8 @@ export default class TransactionService {
       from: zeroX(gqlTx.from?.address),
       nonce: Number(gqlTx.nonce || null),
       blockHash: zeroX(gqlTx.block?.hash),
-      blockNumber: gqlTx.block?.number + '',
-      transactionIndex: gqlTx.index + '',
+      blockNumber: +gqlTx.block?.number,
+      blockTimestamp: +gqlTx.block?.timestamp,
     };
     return iTx;
   }
@@ -62,6 +74,29 @@ export default class TransactionService {
       })
     );
     return newTransactions;
+  }
+
+  public async updateTransaction(tx: ITransaction) {
+    const foundTx = await this.txRepository.findOne({
+      where: {
+        hash: tx.hash,
+      },
+    });
+    foundTx.nonce = tx.nonce;
+    foundTx.index = tx.index;
+    foundTx.value = tx.value;
+    foundTx.gas = foundTx.gas;
+    foundTx.gasPrice = foundTx.gasPrice;
+    foundTx.gasUsed = tx.gasUsed;
+    foundTx.cumulativeGasUsed = tx.cumulativeGasUsed;
+    foundTx.inputData = tx.inputData;
+    foundTx.status = tx.status;
+    foundTx.from = tx.from;
+    foundTx.to = tx.to;
+    foundTx.v = tx.v;
+    foundTx.r = tx.r;
+    foundTx.s = tx.s;
+    return await this.txRepository.save(foundTx);
   }
 
   public async safeSaveEmptyTx(transaction: ITransaction) {
@@ -117,5 +152,27 @@ export default class TransactionService {
       }
     }
     return tx;
+  }
+
+  public createSyntheticTransaction(
+    address: string,
+    value: string,
+    block: IPBFT
+  ): ITransaction {
+    const hash = `GENESIS_${deZeroX(address)}`;
+    return {
+      hash,
+      value: toBN(value).toString(),
+      from: 'GENESIS',
+      to: address,
+      block,
+      gas: '0',
+      gasPrice: '0',
+      gasUsed: '0',
+      cumulativeGasUsed: 0,
+      status: 1,
+      blockNumber: 0,
+      blockTimestamp: 0,
+    };
   }
 }

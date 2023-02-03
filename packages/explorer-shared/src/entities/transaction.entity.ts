@@ -21,7 +21,7 @@ export class TransactionEntity extends BaseEntity implements ITransaction {
   id: number;
 
   @Column({ unique: true })
-  @Index()
+  @Index('transactions_index_hash')
   @IsString()
   hash: string;
 
@@ -57,6 +57,7 @@ export class TransactionEntity extends BaseEntity implements ITransaction {
   @IsString()
   inputData?: string;
 
+  @Index('transactions_index_blockId')
   @ManyToOne(() => PbftEntity, (pbft) => pbft.transactions, {
     onDelete: 'CASCADE',
   })
@@ -67,12 +68,12 @@ export class TransactionEntity extends BaseEntity implements ITransaction {
   status?: number;
 
   @Column({ nullable: true })
-  @Index()
+  @Index('transactions_index_from')
   @IsString()
   from?: string;
 
   @Column({ nullable: true })
-  @Index()
+  @Index('transactions_index_to')
   @IsString()
   to?: string;
 
@@ -93,10 +94,10 @@ export class TransactionEntity extends BaseEntity implements ITransaction {
   blockHash?: string;
 
   @Column({ nullable: true })
-  @IsString()
-  blockNumber?: string;
+  @IsNumber()
+  blockNumber?: number;
 
   @Column({ nullable: true })
-  @IsString()
-  transactionIndex?: string;
+  @IsNumber()
+  blockTimestamp?: number;
 }
