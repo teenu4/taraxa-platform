@@ -50,15 +50,6 @@ export const getLastNDagBlocks = (
   return last6Timestamps;
 };
 
-export const calculateDagBlocksPerSecond = (
-  last6DagBlocks: DagBlock[],
-  last5Timestamps: number[]
-): number[] => {
-  return last5Timestamps.map((time) => {
-    return last6DagBlocks.filter((dag) => dag.timestamp === time).length;
-  });
-};
-
 export const calculateDagsPerSecond = (
   pbfts: PbftBlock[],
   dags: DagBlock[]
@@ -87,7 +78,7 @@ const filterDagsPerBlockPeriod = (
     .filter((dag) => {
       return dag.pbftPeriod === period;
     })
-    .sort((a, b) => a.timestamp + b.timestamp);
+    .sort((a, b) => a.timestamp - b.timestamp);
 };
 
 const getDagsPerSecond = (dags: DagBlock[]) => {
@@ -98,42 +89,20 @@ const getDagsPerSecond = (dags: DagBlock[]) => {
   return Math.floor(dagsLength / (last - first));
 };
 
-export const calculateDagEfficiencyForPBFT = (
+export const calculateDagEfficiency = (
   pbfts: PbftBlock[],
   dags: DagBlock[]
 ): number[] => {
-  interface PBFTWithDags {
-    pbft: PbftBlock;
-    dags: DagBlock[];
-    totalTransactions?: number;
-  }
-
-  const dagsForPbft = pbfts.map((pbft) => {
-    const composite: PBFTWithDags = {
-      pbft,
-      dags: dags.filter((dag) => {
-        return dag.pbftPeriod === pbft.number;
-      }),
-      totalTransactions: 0,
-    };
-    return composite;
-  });
-  dagsForPbft.forEach((c, i) =>
-    c.dags.forEach((dag) => {
-      const txEs = c.totalTransactions + dag.transactionCount;
-      dagsForPbft[i].totalTransactions = txEs;
-    })
-  );
-  const efficiencyCoefficients = dagsForPbft.map((pbftPeriod) =>
-    pbftPeriod.totalTransactions > 0
-      ? (parseFloat(pbftPeriod.totalTransactions.toString()) /
-          (pbftPeriod.pbft.transactionCount > 0
-            ? parseFloat(pbftPeriod.pbft.transactionCount.toString())
-            : 1)) *
-        100
-      : 0
-  );
-  return efficiencyCoefficients.map((c) => {
-    return c > 0 ? (100 / c) * 100 : 100;
+  return pbfts.map((pbft) => {
+    const filteredDags = dags.filter((dag) => dag.pbftPeriod === pbft.number);
+    const transactions = [].concat(
+      ...filteredDags.map((dag) => dag.transactions)
+    );
+    const uniqueTransactionHashes = new Set(
+      transactions.map((transaction) => transaction.hash)
+    );
+    const efficiency =
+      (uniqueTransactionHashes.size / transactions.length) * 100;
+    return efficiency;
   });
 };

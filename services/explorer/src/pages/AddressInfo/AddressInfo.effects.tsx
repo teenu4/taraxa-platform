@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { useExplorerNetwork, useExplorerLoader } from '../../hooks';
 import { AddressInfoDetails, BlockData, Transaction } from '../../models';
@@ -84,9 +83,7 @@ export const useAddressInfoEffects = (
     useState<AddressInfoDetails>();
 
   const { initLoading, finishLoading } = useExplorerLoader();
-  const { backendEndpoint, currentNetwork } = useExplorerNetwork();
-  const navigate = useNavigate();
-  const [network] = useState(currentNetwork);
+  const { backendEndpoint } = useExplorerNetwork();
   const [showLoadingSkeleton, setShowLoadingSkeleton] =
     useState<boolean>(false);
 
@@ -185,10 +182,20 @@ export const useAddressInfoEffects = (
           timestamp: tx.age,
         },
         value: displayWeiOrTara(
-          ethers.BigNumber.from(BigInt(Math.round(+tx.value)))
+          tx.value !== null && tx.value !== undefined
+            ? ethers.BigNumber.from(BigInt(Math.round(+tx.value)))
+            : null
         ),
-        gasPrice: displayWeiOrTara(ethers.BigNumber.from(tx.gasPrice)),
-        gas: displayWeiOrTara(ethers.BigNumber.from(tx.gasUsed)),
+        gasPrice: displayWeiOrTara(
+          tx.gasPrice !== null && tx.gasPrice !== undefined
+            ? ethers.BigNumber.from(tx.gasPrice)
+            : null
+        ),
+        gas: displayWeiOrTara(
+          tx.gasUsed !== null && tx.gasUsed !== undefined
+            ? ethers.BigNumber.from(tx.gasUsed)
+            : null
+        ),
         status: tx.status,
         from: {
           address: tx.from,
@@ -273,12 +280,6 @@ export const useAddressInfoEffects = (
     dagsCount,
     pbftsCount,
   ]);
-
-  useEffect(() => {
-    if (currentNetwork !== network) {
-      navigate('/');
-    }
-  }, [currentNetwork, network]);
 
   const handlePbftChangePage = (newPage: number) => {
     setPbftPage(newPage);
