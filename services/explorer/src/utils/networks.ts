@@ -71,3 +71,48 @@ export const recreateFaucetConnection = (network: string): string => {
   }
   return connectionString;
 };
+
+export const getNetworkSubdomain = (network: string): string => {
+  switch (network) {
+    case Network.TESTNET:
+      return 'testnet';
+    case Network.DEVNET:
+      return 'devnet';
+    case Network.MAINNET:
+      return 'mainnet';
+    default:
+      return;
+  }
+};
+
+export const networkRedirect = (network: string): void => {
+  const currentUrl = window.location.href;
+  const isLocalhost = currentUrl.includes('localhost');
+  const isQa = currentUrl.includes('qa.explorer.taraxa.io');
+  const networkSubdomain = getNetworkSubdomain(network);
+
+  let redirectUrl;
+  if (isLocalhost) {
+    redirectUrl = currentUrl;
+  } else if (isQa) {
+    const baseDomain = currentUrl.match(
+      /^(https?:\/\/)?([^/?#]+)(?:[/?#]|$)/i
+    )[2];
+    redirectUrl = currentUrl.replace(
+      baseDomain,
+      `${networkSubdomain}.qa.explorer.taraxa.io`
+    );
+  } else {
+    const baseDomain = currentUrl.match(
+      /^(https?:\/\/)?([^/?#]+)(?:[/?#]|$)/i
+    )[2];
+    redirectUrl = currentUrl.replace(
+      baseDomain,
+      `${networkSubdomain}.explorer.taraxa.io`
+    );
+  }
+
+  if (redirectUrl !== currentUrl) {
+    window.location.replace(redirectUrl);
+  }
+};
